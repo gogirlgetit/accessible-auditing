@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import Image from 'next/image'
-import { Puzzle, Star, X, ChevronLeft } from 'lucide-react'
+import { Puzzle, Star, X, ChevronLeft, Volume2, Mic } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -15,6 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Switch } from "@/components/ui/switch"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 import localImage from '../public/doordash-homepage.png'
 
@@ -28,8 +30,19 @@ export default function AccessibilityReviewOverlay() {
   const [rating, setRating] = useState(0)
   const [reviews, setReviews] = useState([])
   const [showReviews, setShowReviews] = useState(false)
+  const [isHighContrast, setIsHighContrast] = useState(false)
+  const [isListening, setIsListening] = useState(false)
   const selectionRef = useRef(null)
   const backgroundRef = useRef(null)
+  const speechSynthesis = typeof(window) !== 'undefined' ? window.speechSynthesis : null
+  const speechRecognition = typeof(window) !== 'undefined' ? window.SpeechRecognition ||window.webkitSpeechRecognition : null
+
+  const overlayStyles = {
+    fontFamily: 'OpenDyslexic, sans-serif',
+    fontSize: '18px',
+    lineHeight: '1.5',
+    letterSpacing: '0.05em',
+  }
 
   useEffect(() => {
     if (isSelecting) {
@@ -96,6 +109,32 @@ export default function AccessibilityReviewOverlay() {
     setRating(0)
   }
 
+  const speak = (text) => {
+    if (speechSynthesis) {
+      const utterance = new SpeechSynthesisUtterance(text)
+      speechSynthesis.speak(utterance)
+    }
+  }
+
+  const startListening = () => {
+    if (speechRecognition) {
+      const recognition = new speechRecognition()
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript
+        setReview(transcript)
+      }
+      recognition.start()
+      setIsListening(true)
+    }
+  }
+
+  const stopListening = () => {
+    if (speechRecognition && isListening) {
+      speechRecognition.stop()
+      setIsListening(false)
+    }
+  }
+
   const ReviewList = () => (
     <ScrollArea className="h-[400px] pr-4">
       <div className="space-y-4">
@@ -143,7 +182,7 @@ export default function AccessibilityReviewOverlay() {
   )
 
   return (
-    <div className="relative w-full h-screen overflow-hidden" ref={backgroundRef}>
+    <div className="font-opendyslexic relative w-full h-screen overflow-hidden" ref={backgroundRef}>
       <Image
         src={localImage}
         alt="DoorDash homepage"
@@ -161,9 +200,32 @@ export default function AccessibilityReviewOverlay() {
         <span className="sr-only">Open accessibility review</span>
       </Button>
 
+      {reviews.filter(r => r.type === 'annotate').map((review) => (
+        <TooltipProvider key={review.id}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className="absolute border-2 border-blue-500 bg-blue-200 bg-opacity-40 cursor-pointer"
+                style={{
+                  left: `${review.selectedArea.left}px`,
+                  top: `${review.selectedArea.top}px`,
+                  width: `${review.selectedArea.width}px`,
+                  height: `${review.selectedArea.height}px`,
+                }}
+                onClick={() => speak(review.review)}
+              />
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{review.review}</p>
+              <p className="text-sm text-muted-foreground mt-1">{review.disability}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ))}
+
       {isOverlayOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <Card className="w-full max-w-md">
+          <Card className="w-full max-w-md font-opendyslexic">
             <CardContent className="pt-6">
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
@@ -206,10 +268,13 @@ export default function AccessibilityReviewOverlay() {
                           <SelectValue placeholder="Select disability category" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="visual">Visual Impairment</SelectItem>
-                          <SelectItem value="motor">Motor Impairment</SelectItem>
-                          <SelectItem value="cognitive">Cognitive Impairment</SelectItem>
-                          <SelectItem value="auditory">Auditory Impairment</SelectItem>
+                          <SelectItem value="phono">Phonological Dyslexia</SelectItem>
+                          <SelectItem value="surface">Surface Dyslexia</SelectItem>
+                          <SelectItem value="rapid">Rapid Naming Deficit</SelectItem>
+                          <SelectItem value="double">Double Deficit Dyslexia </SelectItem>
+                          <SelectItem value="attentional">Attentional Dyslexia</SelectItem>
+                          <SelectItem value="visual">Visual Dyslexia</SelectItem>
+                          <SelectItem value="don't know">Don't Know</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -239,6 +304,24 @@ export default function AccessibilityReviewOverlay() {
                         value={review}
                         onChange={(e) => setReview(e.target.value)}
                       />
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => speak(review)}
+                        >
+                          <Volume2 className="h-4 w-4" />
+                          <span className="sr-only">Read aloud</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={isListening ? stopListening : startListening}
+                        >
+                          <Mic className={`h-4 w-4 ${isListening ? 'text-red-500' : ''}`} />
+                          <span className="sr-only">{isListening ? 'Stop listening' : 'Start speech-to-text'}</span>
+                        </Button>
+                      </div>
                     </div>
                     <div className="flex justify-end space-x-2">
                       <Button variant="outline" onClick={() => { resetReviewState(); setShowReviews(false); }}>
@@ -274,7 +357,7 @@ export default function AccessibilityReviewOverlay() {
 
       {selectedArea && !isSelecting && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <Card className="w-full max-w-md">
+          <Card className="w-full max-w-md font-opendyslexic">
             <CardContent className="pt-6">
               <div className="space-y-4">
                 <h2 className="text-lg font-semibold">Annotated Review</h2>
@@ -285,10 +368,13 @@ export default function AccessibilityReviewOverlay() {
                       <SelectValue placeholder="Select disability category" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="visual">Visual Impairment</SelectItem>
-                      <SelectItem value="motor">Motor Impairment</SelectItem>
-                      <SelectItem value="cognitive">Cognitive Impairment</SelectItem>
-                      <SelectItem value="auditory">Auditory Impairment</SelectItem>
+                    <SelectItem value="phono">Phonological Dyslexia</SelectItem>
+                          <SelectItem value="surface">Surface Dyslexia</SelectItem>
+                          <SelectItem value="rapid">Rapid Naming Deficit</SelectItem>
+                          <SelectItem value="double">Double Deficit Dyslexia </SelectItem>
+                          <SelectItem value="attentional">Attentional Dyslexia</SelectItem>
+                          <SelectItem value="visual">Visual Dyslexia</SelectItem>
+                          <SelectItem value="don't know">Don't Know</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -300,6 +386,24 @@ export default function AccessibilityReviewOverlay() {
                     value={review}
                     onChange={(e) => setReview(e.target.value)}
                   />
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => speak(review)}
+                    >
+                      <Volume2 className="h-4 w-4" />
+                      <span className="sr-only">Read aloud</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={isListening ? stopListening : startListening}
+                    >
+                      <Mic className={`h-4 w-4 ${isListening ? 'text-red-500' : ''}`} />
+                      <span className="sr-only">{isListening ? 'Stop listening' : 'Start speech-to-text'}</span>
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex justify-end space-x-2">
                   <Button variant="outline" onClick={() => { resetReviewState(); setIsOverlayOpen(true); }}>
